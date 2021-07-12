@@ -1,3 +1,4 @@
+// UNSUPPORTED: TEMPORARILY_DISABLED
 // RUN: %clangxx -fsycl -fsycl-targets=%sycl_triple  %s -o %t.out
 // RUN: env SYCL_PI_TRACE=2 %GPU_RUN_PLACEHOLDER %t.out %GPU_CHECK_PLACEHOLDER
 // RUN: env SYCL_PI_TRACE=2 %CPU_RUN_PLACEHOLDER %t.out %CPU_CHECK_PLACEHOLDER
@@ -392,53 +393,53 @@ int main() {
 
 // ----------- BUFFERS
 
-//CHECK: start copyD2H-buffer
-//CHECK: ---> piEnqueueMemBufferRead(
-//CHECK: <unknown> : 64
-//CHECK: ---> piEnqueueMemBufferReadRect(
-//CHECK: pi_buff_rect_region width_bytes/height/depth : 64/5/1
+// CHECK-LABEL: start copyD2H-buffer
+// CHECK: ---> piEnqueueMemBufferRead(
+// CHECK: <unknown> : 64
+// CHECK: ---> piEnqueueMemBufferReadRect(
+// CHECK: pi_buff_rect_region width_bytes/height/depth : 64/5/1
 // CHECK-NEXT: <unknown> : 64
-//CHECK: ---> piEnqueueMemBufferReadRect(
-//CHECK: pi_buff_rect_region width_bytes/height/depth : 64/5/3
+// CHECK: ---> piEnqueueMemBufferReadRect(
+// CHECK: pi_buff_rect_region width_bytes/height/depth : 64/5/3
 // CHECK-NEXT: <unknown> : 64
 // CHECK-NEXT: <unknown> : 320
-//CHECK: end copyD2H-buffer
+// CHECK: end copyD2H-buffer
 
-//CHECK: start copyH2D-buffer
-//CHECK: ---> piEnqueueMemBufferWrite(
-//CHECK: <unknown> : 64
-//CHECK:  ---> piEnqueueMemBufferWriteRect(
-//CHECK: pi_buff_rect_region width_bytes/height/depth : 64/5/1
+// CHECK-LABEL: start copyH2D-buffer
+// CHECK: ---> piEnqueueMemBufferWrite(
+// CHECK: <unknown> : 64
+// CHECK:  ---> piEnqueueMemBufferWriteRect(
+// CHECK: pi_buff_rect_region width_bytes/height/depth : 64/5/1
 // CHECK-NEXT: <unknown> : 64
 // CHECK-NEXT: <unknown> : 0
 // CHECK-NEXT: <unknown> : 64
-//CHECK:  ---> piEnqueueMemBufferWriteRect(
-//CHECK: pi_buff_rect_region width_bytes/height/depth : 64/5/3
+// CHECK:  ---> piEnqueueMemBufferWriteRect(
+// CHECK: pi_buff_rect_region width_bytes/height/depth : 64/5/3
 // CHECK-NEXT: <unknown> : 64
 // CHECK-NEXT: <unknown> : 320
 // CHECK-NEXT: <unknown> : 64
 // CHECK-NEXT: <unknown> : 320
-//CHECK: end copyH2D-buffer
+// CHECK: end copyH2D-buffer
 
-//CHECK: start copyD2D-buffer
-//CHECK: ---> piEnqueueMemBufferCopy(
-//CHECK: <unknown> : 64
-//CHECK: ---> piEnqueueMemBufferCopyRect(
-//CHECK: pi_buff_rect_region width_bytes/height/depth : 64/5/1
+// CHECK-LABEL: start copyD2D-buffer
+// CHECK: ---> piEnqueueMemBufferCopy(
+// CHECK: <unknown> : 64
+// CHECK: ---> piEnqueueMemBufferCopyRect(
+// CHECK: pi_buff_rect_region width_bytes/height/depth : 64/5/1
 // CHECK-NEXT: <unknown> : 64
 // CHECK-NEXT: <unknown> : 320
 // CHECK-NEXT: <unknown> : 64
 // CHECK-NEXT: <unknown> : 320
-//CHECK: pi_buff_rect_region width_bytes/height/depth : 64/5/3
+// CHECK: pi_buff_rect_region width_bytes/height/depth : 64/5/3
 // CHECK-NEXT: <unknown> : 64
 // CHECK-NEXT: <unknown> : 320
 // CHECK-NEXT: <unknown> : 64
 // CHECK-NEXT: <unknown> : 320
-//CHECK: end copyD2D-buffer
+// CHECK: end copyD2D-buffer
 
-//CHECK: start testFill Buffer
-//CHECK: ---> piEnqueueMemBufferFill(
-//CHECK: <unknown> : 4
+// CHECK-LABEL: start testFill Buffer
+// CHECK: ---> piEnqueueMemBufferFill(
+// CHECK: <unknown> : 4
 // CHECK-NEXT: <unknown> : 0
 // CHECK-NEXT: <unknown> : 64
-//CHECK: end testFill Buffer
+// CHECK: end testFill Buffer

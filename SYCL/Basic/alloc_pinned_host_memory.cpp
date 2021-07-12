@@ -38,6 +38,6 @@ int main() {
 }
 
 // CHECK:---> piMemBufferCreate
+// CHECK:---> piMemBufferCreate
 // CHECK-NEXT: {{.*}} : {{.*}}
-// CHECK-NEXT: {{.*}} : 9
-// CHECK:ZE ---> zeMemAllocHost
+// CHECK-NEXT: {{.*}} : 17

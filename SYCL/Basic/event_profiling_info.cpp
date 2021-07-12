@@ -63,6 +63,8 @@ int main() {
     event kernelEvent = kernelQueue.submit([&](sycl::handler &CGH) {
       CGH.single_task<class EmptyKernel>([=]() {});
     });
+    copyEvent.wait();
+    kernelEvent.wait();
 
     assert(verifyProfiling(copyEvent) && verifyProfiling(kernelEvent));
   }

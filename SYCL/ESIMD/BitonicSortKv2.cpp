@@ -19,7 +19,7 @@
 #include <iostream>
 
 using namespace cl::sycl;
-using namespace sycl::INTEL::gpu;
+using namespace sycl::ext::intel::experimental::esimd;
 using namespace std;
 
 #define LOG2_ELEMENTS 16 // 24
@@ -43,7 +43,9 @@ ESIMD_INLINE simd<ty, size> cmk_read(ty *buf, uint32_t offset) {
   simd<ty, size> v;
 #pragma unroll
   for (uint32_t i = 0; i < size; i += 32) {
-    v.template select<32, 1>(i) = block_load<ty, 32>(buf + offset + i);
+    simd<ty, 32> data;
+    data.copy_from(buf + offset + i);
+    v.template select<32, 1>(i) = data;
   }
   return v;
 }
@@ -52,7 +54,8 @@ template <typename ty, uint32_t size>
 ESIMD_INLINE void cmk_write(ty *buf, uint32_t offset, simd<ty, size> v) {
 #pragma unroll
   for (uint32_t i = 0; i < size; i += 32) {
-    block_store<ty, 32>(buf + offset + i, v.template select<32, 1>(i));
+    simd<ty, 32> vals = v.template select<32, 1>(i);
+    vals.copy_to(buf + offset + i);
   }
 }
 
@@ -81,8 +84,8 @@ bitonic_exchange4(simd<uint32_t, BASE_SZ> A, simd<ushort, 32> flip) {
   simd<uint32_t, BASE_SZ> B;
 #pragma unroll
   for (int i = 0; i < BASE_SZ; i += 32) {
-    auto MA = A.select<32, 1>(i).format<uint32_t, 4, 8>();
-    auto MB = B.select<32, 1>(i).format<uint32_t, 4, 8>();
+    auto MA = A.select<32, 1>(i).bit_cast_view<uint32_t, 4, 8>();
+    auto MB = B.select<32, 1>(i).bit_cast_view<uint32_t, 4, 8>();
     MB.select<4, 1, 4, 1>(0, 0) = MA.select<4, 1, 4, 1>(0, 4);
     MB.select<4, 1, 4, 1>(0, 4) = MA.select<4, 1, 4, 1>(0, 0);
     B.select<32, 1>(i).merge(A.select<32, 1>(i),
@@ -110,8 +113,8 @@ bitonic_exchange2(simd<uint32_t, BASE_SZ> A, simd<ushort, 32> flip) {
   simd<uint32_t, BASE_SZ> B;
 #pragma unroll
   for (int i = 0; i < BASE_SZ; i += 32) {
-    auto MB = B.select<32, 1>(i).format<long long, 4, 4>();
-    auto MA = A.select<32, 1>(i).format<long long, 4, 4>();
+    auto MB = B.select<32, 1>(i).bit_cast_view<long long, 4, 4>();
+    auto MA = A.select<32, 1>(i).bit_cast_view<long long, 4, 4>();
     MB.select<4, 1, 2, 2>(0, 0) = MA.select<4, 1, 2, 2>(0, 1);
     MB.select<4, 1, 2, 2>(0, 1) = MA.select<4, 1, 2, 2>(0, 0);
     B.select<32, 1>(i).merge(A.select<32, 1>(i),
@@ -240,8 +243,8 @@ ESIMD_INLINE void bitonic_merge(uint32_t offset, simd<uint32_t, BASE_SZ> &A,
   simd<ushort, 32> flip16 = esimd_unpack_mask<32>(0x0f0f0f0f); //(init_mask16);
 #pragma unroll
   for (int i = 0; i < BASE_SZ; i += 32) {
-    auto MA = A.select<32, 1>(i).format<uint32_t, 4, 8>();
-    auto MB = B.select<32, 1>(i).format<uint32_t, 4, 8>();
+    auto MA = A.select<32, 1>(i).bit_cast_view<uint32_t, 4, 8>();
+    auto MB = B.select<32, 1>(i).bit_cast_view<uint32_t, 4, 8>();
     MA.select<4, 1, 4, 1>(0, 0) = MB.select<4, 1, 4, 1>(0, 4);
     MA.select<4, 1, 4, 1>(0, 4) = MB.select<4, 1, 4, 1>(0, 0);
     bool dir_up = (((offset + i) >> (m + 1)) & 1) == 0;
@@ -260,8 +263,8 @@ ESIMD_INLINE void bitonic_merge(uint32_t offset, simd<uint32_t, BASE_SZ> &A,
   simd<ushort, 32> flip18 = esimd_unpack_mask<32>(0x33333333); //(init_mask18);
 #pragma unroll
   for (int i = 0; i < BASE_SZ; i += 32) {
-    auto MB = B.select<32, 1>(i).format<long long, 4, 4>();
-    auto MA = A.select<32, 1>(i).format<long long, 4, 4>();
+    auto MB = B.select<32, 1>(i).bit_cast_view<long long, 4, 4>();
+    auto MA = A.select<32, 1>(i).bit_cast_view<long long, 4, 4>();
 
     MB.select<4, 1, 2, 2>(0, 0) = MA.select<4, 1, 2, 2>(0, 1);
     MB.select<4, 1, 2, 2>(0, 1) = MA.select<4, 1, 2, 2>(0, 0);
@@ -517,7 +520,7 @@ int BitonicSort::Solve(uint32_t *pInputs, uint32_t *pOutputs, uint32_t size) {
     auto e = pQueue_->submit([&](handler &cgh) {
       cgh.parallel_for<class Sort256>(
           SortGlobalRange * SortLocalRange, [=](id<1> i) SYCL_ESIMD_KERNEL {
-            using namespace sycl::INTEL::gpu;
+            using namespace sycl::ext::intel::experimental::esimd;
             cmk_bitonic_sort_256(pInputs, pOutputs, i);
           });
     });
@@ -553,12 +556,12 @@ int BitonicSort::Solve(uint32_t *pInputs, uint32_t *pOutputs, uint32_t size) {
       // locally.
       for (int j = i; j >= 8; j--) {
         mergeEvent[k] = pQueue_->submit([&](handler &cgh) {
-          cgh.parallel_for<class Merge>(MergeGlobalRange * MergeLocalRange,
-                                        [=](id<1> tid) SYCL_ESIMD_KERNEL {
-                                          using namespace sycl::INTEL::gpu;
-                                          cmk_bitonic_merge(pOutputs, j, i,
-                                                            tid);
-                                        });
+          cgh.parallel_for<class Merge>(
+              MergeGlobalRange * MergeLocalRange,
+              [=](id<1> tid) SYCL_ESIMD_KERNEL {
+                using namespace sycl::ext::intel::experimental::esimd;
+                cmk_bitonic_merge(pOutputs, j, i, tid);
+              });
         });
         // mergeEvent[k].wait();
         k++;

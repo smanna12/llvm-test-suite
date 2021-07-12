@@ -1,14 +1,10 @@
-// RUN: %clangxx %s -o %t1.out %sycl_options -Wno-sycl-strict -Xclang -verify-ignore-unexpected=note,warning
+// RUN: %clangxx %cxx_std_optionc++17 %s -o %t1.out %sycl_options -Wno-sycl-strict -Xclang -verify-ignore-unexpected=note,warning
 // RUN: %HOST_RUN_PLACEHOLDER %t1.out
 // RUN: %clangxx -fsycl -fsycl-targets=%sycl_triple %s -o %t2.out
 // RUN: %HOST_RUN_PLACEHOLDER %t2.out
 // RUN: %CPU_RUN_PLACEHOLDER %t2.out
 // RUN: %GPU_RUN_PLACEHOLDER %t2.out
 // RUN: %ACC_RUN_PLACEHOLDER %t2.out
-
-// TODO: Unexpected result
-// TODO: _indexers.cpp:37: int main(): Assertion `id == -1' failed.
-// XFAIL: level_zero&&gpu
 
 #include <CL/sycl.hpp>
 

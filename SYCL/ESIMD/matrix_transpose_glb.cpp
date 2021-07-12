@@ -18,7 +18,7 @@
 
 using namespace cl::sycl;
 using namespace std;
-using namespace sycl::INTEL::gpu;
+using namespace sycl::ext::intel::experimental::esimd;
 
 void initMatrix(int *M, unsigned N) {
   assert(N >= 8 && (((N - 1) & N) == 0) &&
@@ -76,8 +76,10 @@ ESIMD_NOINLINE void transpose_matrix(int InR, int OuR) {
   // mask to control how to merge two vectors.
   simd<uint16_t, 16> mask = 0;
   mask.select<8, 2>(0) = 1;
-  auto t1 = GRF.template format<int, 48, 16>().select<4, 1, 16, 1>(InR >> 1, 0);
-  auto t2 = GRF.template format<int, 48, 16>().select<4, 1, 16, 1>(OuR >> 1, 0);
+  auto t1 = GRF.template bit_cast_view<int, 48, 16>().select<4, 1, 16, 1>(
+      InR >> 1, 0);
+  auto t2 = GRF.template bit_cast_view<int, 48, 16>().select<4, 1, 16, 1>(
+      OuR >> 1, 0);
 
   // j = 1
   t2.row(0).merge(t1.template replicate<8, 1, 2, 0>(0, 0),
@@ -117,7 +119,9 @@ ESIMD_NOINLINE void read(int *buf, int MZ, int col, int row, int GrfIdx) {
   buf += row * MZ + col;
 #pragma unroll
   for (int i = 0; i < N; ++i) {
-    res.template select<N, 1>(i * N) = block_load<int, N>(buf);
+    simd<int, N> data;
+    data.copy_from(buf);
+    res.template select<N, 1>(i * N) = data;
     buf += MZ;
   }
 }
@@ -129,7 +133,8 @@ ESIMD_NOINLINE void write(int *buf, int MZ, int col, int row, int GrfIdx) {
   buf += row * MZ + col;
 #pragma unroll
   for (int i = 0; i < N; ++i) {
-    block_store<int, N>(buf, val.template select<N, 1>(i * N));
+    simd<int, N> val2 = val.template select<N, 1>(i * N);
+    val2.copy_to(buf);
     buf += MZ;
   }
 }

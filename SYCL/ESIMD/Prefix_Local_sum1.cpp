@@ -22,11 +22,11 @@
 #define TUPLE_SZ 1
 
 #if TUPLE_SZ == 1
-#define GATHER_SCATTER_MASK ESIMD_R_ENABLE
+#define GATHER_SCATTER_MASK rgba_channel_mask::R
 #elif TUPLE_SZ == 2
-#define GATHER_SCATTER_MASK ESIMD_GR_ENABLE
+#define GATHER_SCATTER_MASK rgba_channel_mask::GR
 #elif TUPLE_SZ == 4
-#define GATHER_SCATTER_MASK ESIMD_ABGR_ENABLE
+#define GATHER_SCATTER_MASK rgba_channel_mask::ABGR
 #endif
 
 #define PREFIX_ENTRIES 256
@@ -36,7 +36,7 @@
 #define MIN_NUM_THREADS 1
 
 using namespace cl::sycl;
-using namespace sycl::INTEL::gpu;
+using namespace sycl::ext::intel::experimental::esimd;
 
 void compute_local_prefixsum(unsigned int input[], unsigned int prefixSum[],
                              unsigned int size) {
@@ -70,21 +70,24 @@ void cmk_sum_tuple_count(unsigned int *buf, unsigned int h_pos) {
   simd<unsigned, 32 * TUPLE_SZ> S, T;
 #pragma unroll
   for (int i = 0; i < TUPLE_SZ; i++) {
-    S.select<32, 1>(i * 32) = block_load<unsigned, 32>(buf + offset + i * 32);
+    simd<unsigned, 32> data;
+    data.copy_from(buf + offset + i * 32);
+    S.select<32, 1>(i * 32) = data;
   }
 
 #pragma unroll
   for (int i = 1; i < PREFIX_ENTRIES / 32; i++) {
 #pragma unroll
     for (int j = 0; j < TUPLE_SZ; j++) {
-      T.select<32, 1>(j * 32) =
-          block_load<unsigned, 32>(buf + offset + i * 32 * TUPLE_SZ + j * 32);
+      simd<unsigned, 32> data;
+      data.copy_from(buf + offset + i * 32 * TUPLE_SZ + j * 32);
+      T.select<32, 1>(j * 32) = data;
     }
     S += T;
   }
 
   // format S to be a 32xTUPLE_SZ matrix
-  auto cnt_table = S.format<unsigned int, 32, TUPLE_SZ>();
+  auto cnt_table = S.bit_cast_view<unsigned int, 32, TUPLE_SZ>();
   // sum reduction for each bin
   cnt_table.select<16, 1, TUPLE_SZ, 1>(0, 0) +=
       cnt_table.select<16, 1, TUPLE_SZ, 1>(16, 0);
@@ -109,7 +112,7 @@ void cmk_sum_tuple_count(unsigned int *buf, unsigned int h_pos) {
 // This is a ULT test variant of PrefixSum kernel with different implementation
 // to increase test coverage of different usage cases and help isolate bugs.
 // Difference from PrefixSum kernel:
-// - Use block_load<>() to read in data
+// - Use copy_from<>() to read in data
 // - Use scatter<>() to write output
 //************************************
 int main(int argc, char *argv[]) {

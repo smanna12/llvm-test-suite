@@ -1,4 +1,4 @@
-// RUN: %clangxx -fsycl -fsycl-targets=%sycl_triple %s -o %t.out
+// RUN: %clangxx -fsycl -fsycl-targets=%sycl_triple -fno-sycl-id-queries-fit-in-int %s -o %t.out
 // Sub-groups are not suported on Host
 // RUN: %GPU_RUN_PLACEHOLDER %t.out
 // RUN: %CPU_RUN_PLACEHOLDER %t.out
@@ -48,11 +48,15 @@ int main(int argc, char *argv[]) {
                     sg.get_max_local_range()[0];
             // Global address space
             auto x = sg.load(&global[i]);
+            auto x_cv = sg.load<const volatile int>(&global[i]);
 
             // Local address space
             auto y = sg.load(&local[i]);
+            auto y_cv = sg.load<const volatile int>(&local[i]);
 
-            sg.store(&global[i], x + y);
+            // Store result only if same for non-cv and cv
+            if (x == x_cv && y == y_cv)
+              sg.store(&global[i], x + y);
           });
     });
   }

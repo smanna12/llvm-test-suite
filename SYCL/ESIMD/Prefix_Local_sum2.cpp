@@ -22,11 +22,11 @@
 #define TUPLE_SZ 4
 
 #if TUPLE_SZ == 1
-#define GATHER_SCATTER_MASK ESIMD_R_ENABLE
+#define GATHER_SCATTER_MASK rgba_channel_mask::R
 #elif TUPLE_SZ == 2
-#define GATHER_SCATTER_MASK ESIMD_GR_ENABLE
+#define GATHER_SCATTER_MASK rgba_channel_mask::GR
 #elif TUPLE_SZ == 4
-#define GATHER_SCATTER_MASK ESIMD_ABGR_ENABLE
+#define GATHER_SCATTER_MASK rgba_channel_mask::ABGR
 #endif
 
 #define PREFIX_ENTRIES 256
@@ -36,7 +36,7 @@
 #define MIN_NUM_THREADS 1
 
 using namespace cl::sycl;
-using namespace sycl::INTEL::gpu;
+using namespace sycl::ext::intel::experimental::esimd;
 
 void compute_local_prefixsum(unsigned int input[], unsigned int prefixSum[],
                              unsigned int size) {
@@ -83,7 +83,7 @@ void cmk_acum_iterative(unsigned *buf, unsigned h_pos,
     S += T;
   }
 
-  auto cnt_table = S.format<unsigned int, TUPLE_SZ, 32>();
+  auto cnt_table = S.bit_cast_view<unsigned int, TUPLE_SZ, 32>();
 
   simd<unsigned, TUPLE_SZ> sum;
 #pragma unroll

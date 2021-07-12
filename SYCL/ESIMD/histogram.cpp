@@ -153,7 +153,7 @@ int main(int argc, char *argv[]) {
 
         cgh.parallel_for<class Hist>(
             Range, [=](nd_item<1> ndi) SYCL_ESIMD_KERNEL {
-              using namespace sycl::INTEL::gpu;
+              using namespace sycl::ext::intel::experimental::esimd;
 
               // Get thread origin offsets
               uint tid = ndi.get_group(0);
@@ -199,13 +199,14 @@ int main(int argc, char *argv[]) {
                 src = histogram.select<8, 1>(i);
 
 #ifdef __SYCL_DEVICE_ONLY__
-                flat_atomic<EsimdAtomicOpType::ATOMIC_ADD, unsigned int, 8>(
-                    bins, offset, src, 1);
+                flat_atomic<atomic_op::add, unsigned int, 8>(bins, offset, src,
+                                                             1);
                 offset += 8 * sizeof(unsigned int);
 #else
-              auto vals = block_load<unsigned int, 8>(bins + i);
-              vals = vals + src;
-              block_store<unsigned int, 8>(bins + i, vals);
+                simd<unsigned int, 8> vals;
+                vals.copy_from(bins + i);
+                vals = vals + src;
+                vals.copy_to(bins + i);
 #endif
               }
             });

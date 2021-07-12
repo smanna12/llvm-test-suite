@@ -10,7 +10,6 @@
 // RUN: %clangxx -fsycl %s -I%S/.. -o %t.out
 // RUN: %HOST_RUN_PLACEHOLDER %t.out %S/points.csv
 // RUN: %GPU_RUN_PLACEHOLDER %t.out %S/points.csv
-//
 
 #include "kmeans.h"
 #include "esimd_test_utils.hpp"
@@ -23,7 +22,7 @@
 #include <vector>
 
 using namespace cl::sycl;
-using namespace sycl::INTEL::gpu;
+using namespace sycl::ext::intel::experimental::esimd;
 using namespace std;
 
 inline float dist(Point p, Centroid c) {
@@ -234,43 +233,38 @@ int main(int argc, char *argv[]) {
       cgh.parallel_for<class kMeans>(
           Range, [=](nd_item<1> it) SYCL_ESIMD_KERNEL {
             simd<float, 2 * NUM_CENTROIDS_ALLOCATED> centroids(0);
-            auto centroidsXYXY =
-                centroids.format<float, NUM_CENTROIDS_ALLOCATED / SIMD_SIZE,
-                                 SIMD_SIZE * 2>();
-            auto centroidsXY =
-                centroids.format<float, 2 * NUM_CENTROIDS_ALLOCATED / SIMD_SIZE,
-                                 SIMD_SIZE>();
+            auto centroidsXYXY = centroids.bit_cast_view<
+                float, NUM_CENTROIDS_ALLOCATED / SIMD_SIZE, SIMD_SIZE * 2>();
+            auto centroidsXY = centroids.bit_cast_view<
+                float, 2 * NUM_CENTROIDS_ALLOCATED / SIMD_SIZE, SIMD_SIZE>();
 
 #pragma unroll
             for (int i = 0; i < NUM_CENTROIDS_ALLOCATED / SIMD_SIZE; i++) {
-              centroidsXYXY.row(i) =
-                  block_load<float, 2 * SIMD_SIZE>(kcentroids4[i].xyn);
+              simd<float, 2 * SIMD_SIZE> data;
+              data.copy_from(kcentroids4[i].xyn);
+              centroidsXYXY.row(i) = data;
             }
 
             simd<float, NUM_CENTROIDS_ALLOCATED> accumxsum(0);
             simd<float, NUM_CENTROIDS_ALLOCATED> accumysum(0);
             simd<int, NUM_CENTROIDS_ALLOCATED> accumnpoints(0);
 
-            auto xsum =
-                accumxsum.format<float, NUM_CENTROIDS_ALLOCATED / SIMD_SIZE,
-                                 SIMD_SIZE>();
-            auto ysum =
-                accumysum.format<float, NUM_CENTROIDS_ALLOCATED / SIMD_SIZE,
-                                 SIMD_SIZE>();
-            auto npoints =
-                accumnpoints.format<int, NUM_CENTROIDS_ALLOCATED / SIMD_SIZE,
-                                    SIMD_SIZE>();
+            auto xsum = accumxsum.bit_cast_view<
+                float, NUM_CENTROIDS_ALLOCATED / SIMD_SIZE, SIMD_SIZE>();
+            auto ysum = accumysum.bit_cast_view<
+                float, NUM_CENTROIDS_ALLOCATED / SIMD_SIZE, SIMD_SIZE>();
+            auto npoints = accumnpoints.bit_cast_view<
+                int, NUM_CENTROIDS_ALLOCATED / SIMD_SIZE, SIMD_SIZE>();
 
             // each thread handles POINTS_PER_THREAD points
             int index = it.get_global_id(0) * POINTS_PER_THREAD / SIMD_SIZE;
 
             for (int i = 0; i < POINTS_PER_THREAD / SIMD_SIZE; i++) {
               simd<float, 2 * SIMD_SIZE> points;
-              auto pointsXY = points.format<float, 2, SIMD_SIZE>();
+              auto pointsXY = points.bit_cast_view<float, 2, SIMD_SIZE>();
               simd<int, SIMD_SIZE> cluster(0);
 
-              points =
-                  block_load<float, 2 * SIMD_SIZE>(kpoints4[index + i].xyn);
+              points.copy_from(kpoints4[index + i].xyn);
 
               simd<float, SIMD_SIZE> dx =
                   pointsXY.row(0) - centroidsXY.row(0)[0];
@@ -309,7 +303,7 @@ int main(int argc, char *argv[]) {
                 min_dist.merge(dist, (dist < min_dist));
               }
 
-              block_store<int, SIMD_SIZE>(kpoints4[index + i].cluster, cluster);
+              cluster.copy_to(kpoints4[index + i].cluster);
 
 #pragma unroll
               for (int k = 0; k < SIMD_SIZE; k++) {
@@ -352,14 +346,13 @@ int main(int argc, char *argv[]) {
             unsigned int offset = 0;
             for (int i = 0; i < (NUM_POINTS / POINTS_PER_THREAD) / SIMD_SIZE;
                  i++) {
-              simd<float, SIMD_SIZE> t = block_load<float, SIMD_SIZE>(
-                  kaccum4[it.get_global_id(0)].x_sum + offset);
+              simd<float, SIMD_SIZE> t;
+              t.copy_from(kaccum4[it.get_global_id(0)].x_sum + offset);
               xsum += t;
-              t = block_load<float, SIMD_SIZE>(
-                  kaccum4[it.get_global_id(0)].y_sum + offset);
+              t.copy_from(kaccum4[it.get_global_id(0)].y_sum + offset);
               ysum += t;
-              simd<int, SIMD_SIZE> n = block_load<int, SIMD_SIZE>(
-                  kaccum4[it.get_global_id(0)].num_points + offset);
+              simd<int, SIMD_SIZE> n;
+              n.copy_from(kaccum4[it.get_global_id(0)].num_points + offset);
               npoints += n;
               offset += SIMD_SIZE;
             }
@@ -368,7 +361,7 @@ int main(int argc, char *argv[]) {
             int num = reduce<int>(npoints, std::plus<>());
             centroid.select<1, 0>(0) = reduce<float>(xsum, std::plus<>()) / num;
             centroid.select<1, 0>(1) = reduce<float>(ysum, std::plus<>()) / num;
-            (centroid.format<int>()).select<1, 0>(2) = num;
+            (centroid.bit_cast_view<int>()).select<1, 0>(2) = num;
 
             simd<ushort, SIMD_SIZE> mask(0);
             mask.select<3, 1>(0) = 1;

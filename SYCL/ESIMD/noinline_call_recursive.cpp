@@ -6,9 +6,11 @@
 //
 //===----------------------------------------------------------------------===//
 // REQUIRES: gpu
+// Recursion is not supported in ESIMD (intel/llvm PR#3390)
+// REQUIRES: TEMPORARY_DISBLED
+// UNSUPPORTED: cuda
 // RUN: %clangxx -fsycl %s -o %t.out
 // RUN: env IGC_FunctionControl=3 IGC_ForceInlineStackCallWithImplArg=1 %GPU_RUN_PLACEHOLDER %t.out
-// UNSUPPORTED: cuda
 //
 // The test checks that ESIMD kernels support recursive call of noinline
 // functions.
@@ -48,14 +50,14 @@ int main(int argc, char **argv) {
     q.submit([&](handler &cgh) {
       auto acc = buf.get_access<access::mode::write>(cgh);
 
-      cgh.parallel_for<KernelID>(sycl::range<1>{1},
-                                 [=](id<1> i) SYCL_ESIMD_KERNEL {
-                                   using namespace sycl::INTEL::gpu;
+      cgh.parallel_for<KernelID>(
+          sycl::range<1>{1}, [=](id<1> i) SYCL_ESIMD_KERNEL {
+            using namespace sycl::ext::intel::experimental::esimd;
 
-                                   auto res = add(in1, in2, in3);
+            auto res = add(in1, in2, in3);
 
-                                   scalar_store(acc, 0, res);
-                                 });
+            scalar_store(acc, 0, res);
+          });
     });
   } catch (cl::sycl::exception const &e) {
     std::cout << "SYCL exception caught: " << e.what() << std::endl;
