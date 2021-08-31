@@ -1,7 +1,3 @@
-// XFAIL: cuda
-// The negative test fails on CUDA.  It's not clear whether the CUDA backend
-// respects the reqd_work_group_size attribute.
-
 // RUN: %clangxx -fsycl -fsycl-targets=%sycl_triple  %s -o %t.out
 // RUN: %CPU_RUN_PLACEHOLDER %t.out
 // RUN: %GPU_RUN_PLACEHOLDER %t.out
@@ -98,10 +94,10 @@ int main() {
                  "thrown\n";
     return 1; // We shouldn't be here, exception is expected
   } catch (nd_range_error &E) {
-    if (string_class(E.what()).find(
+    if (std::string(E.what()).find(
             "The specified local size {8, 8, 8} doesn't match the required "
             "work-group size specified in the program source {4, 4, 4}") ==
-        string_class::npos) {
+        std::string::npos) {
       std::cerr
           << "Test case ReqdWGSizeNegativeA failed: unexpected nd_range_error "
              "exception: "
